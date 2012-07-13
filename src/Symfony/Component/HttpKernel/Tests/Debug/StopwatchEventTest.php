@@ -79,7 +79,7 @@ class StopwatchEventTest extends \PHPUnit_Framework_TestCase
         usleep(10000);
         $event->stop();
         $total = $event->getTotalTime();
-        $this->assertTrue($total >= 11 && $total <= 29, $total.' should be 20 (between 11 and 29)');
+        $this->assertTrue($total >= 11 && $total <= 31, $total.' should be 20 (between 11 and 31)');
     }
 
     /**
