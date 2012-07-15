@@ -16,7 +16,7 @@
         }
     ],
     "require": {
-        "php": ">=5.3.3",
+        "php": ">=5.3.4",
         "symfony/event-dispatcher": "2.1.*",
         "symfony/http-foundation": "2.1.*",
         "symfony/http-kernel": "2.1.*"
@@ -24,6 +24,7 @@
     "require-dev": {
         "symfony/form": "2.1.*",
         "symfony/routing": "2.1.*",
+        "symfony/validator": "2.1.*",
         "doctrine/common": ">=2.2,<2.4-dev",
         "doctrine/dbal": ">=2.2,<2.4-dev"
     },
@@ -31,6 +32,7 @@
         "symfony/class-loader": "self.version",
         "symfony/finder": "self.version",
         "symfony/form": "self.version",
+        "symfony/validator": "self.version",
         "symfony/routing": "self.version",
         "doctrine/dbal": "to use the built-in ACL implementation"
     },

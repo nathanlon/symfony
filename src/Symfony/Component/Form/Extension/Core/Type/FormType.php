@@ -12,15 +12,14 @@
 namespace Symfony\Component\Form\Extension\Core\Type;
 
 use Symfony\Component\Form\AbstractType;
-use Symfony\Component\Form\Util\PropertyPath;
 use Symfony\Component\Form\FormBuilder;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormViewInterface;
+use Symfony\Component\Form\Extension\Core\EventListener\BindRequestListener;
 use Symfony\Component\Form\Extension\Core\EventListener\TrimListener;
 use Symfony\Component\Form\Extension\Core\DataMapper\PropertyPathMapper;
-use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Form\Exception\FormException;
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolverInterface;
@@ -42,8 +41,11 @@ class FormType extends AbstractType
             ->setMapped($options['mapped'])
             ->setByReference($options['by_reference'])
             ->setVirtual($options['virtual'])
-            ->setData($options['data'])
-            ->setDataMapper(new PropertyPathMapper())
+            ->setCompound($options['compound'])
+            ->setData(isset($options['data']) ? $options['data'] : null)
+            ->setDataLocked(isset($options['data']))
+            ->setDataMapper($options['compound'] ? new PropertyPathMapper() : null)
+            ->addEventSubscriber(new BindRequestListener())
         ;
 
         if ($options['trim']) {
@@ -57,6 +59,7 @@ class FormType extends AbstractType
     public function buildView(FormViewInterface $view, FormInterface $form, array $options)
     {
         $name = $form->getName();
+        $blockName = $options['block_name'] ?: $form->getName();
         $readOnly = $options['read_only'];
         $translationDomain = $options['translation_domain'];
 
@@ -65,23 +68,30 @@ class FormType extends AbstractType
                 throw new FormException('Form node with empty name can be used only as root form node.');
             }
 
-            if ('' !== ($parentFullName = $view->getParent()->getVar('full_name'))) {
-                $id = sprintf('%s_%s', $view->getParent()->getVar('id'), $name);
+            $parentView = $view->getParent();
+
+            if ('' !== ($parentFullName = $parentView->getVar('full_name'))) {
+                $id = sprintf('%s_%s', $parentView->getVar('id'), $name);
                 $fullName = sprintf('%s[%s]', $parentFullName, $name);
+                $fullBlockName = sprintf('%s_%s', $parentView->getVar('full_block_name'), $blockName);
             } else {
                 $id = $name;
                 $fullName = $name;
+                $fullBlockName = '_' . $blockName;
             }
 
-            // Complex fields are read-only if themselves or their parent is.
-            $readOnly = $readOnly || $view->getParent()->getVar('read_only');
+            // Complex fields are read-only if they themselves or their parents are.
+            if (!$readOnly) {
+                $readOnly = $parentView->getVar('read_only');
+            }
 
             if (!$translationDomain) {
-                $translationDomain = $view->getParent()->getVar('translation_domain');
+                $translationDomain = $parentView->getVar('translation_domain');
             }
         } else {
             $id = $name;
             $fullName = $name;
+            $fullBlockName = '_' . $blockName;
 
             // Strip leading underscores and digits. These are allowed in
             // form names, but not in HTML4 ID attributes.
@@ -90,8 +100,8 @@ class FormType extends AbstractType
         }
 
         $types = array();
-        foreach ($form->getConfig()->getTypes() as $type) {
-            $types[] = $type->getName();
+        for ($type = $form->getConfig()->getType(); null !== $type; $type = $type->getParent()) {
+            array_unshift($types, $type->getName());
         }
 
         if (!$translationDomain) {
@@ -103,6 +113,7 @@ class FormType extends AbstractType
             'id'                 => $id,
             'name'               => $name,
             'full_name'          => $fullName,
+            'full_block_name'    => $fullBlockName,
             'read_only'          => $readOnly,
             'errors'             => $form->getErrors(),
             'valid'              => $form->isBound() ? $form->isValid() : true,
@@ -112,11 +123,11 @@ class FormType extends AbstractType
             'max_length'         => $options['max_length'],
             'pattern'            => $options['pattern'],
             'size'               => null,
-            'label'              => $options['label'] ?: $this->humanize($form->getName()),
+            'label'              => $options['label'],
             'multipart'          => false,
             'attr'               => $options['attr'],
             'label_attr'         => $options['label_attr'],
-            'compound'           => $options['compound'],
+            'compound'           => $form->getConfig()->getCompound(),
             'types'              => $types,
             'translation_domain' => $translationDomain,
         ));
@@ -146,7 +157,7 @@ class FormType extends AbstractType
     {
         // Derive "data_class" option from passed "data" object
         $dataClass = function (Options $options) {
-            return is_object($options['data']) ? get_class($options['data']) : null;
+            return isset($options['data']) && is_object($options['data']) ? get_class($options['data']) : null;
         };
 
         // Derive "empty_data" closure from "data_class" option
@@ -160,7 +171,7 @@ class FormType extends AbstractType
             }
 
             return function (FormInterface $form) {
-                return count($form) > 0 ? array() : '';
+                return $form->getConfig()->getCompound() ? array() : '';
             };
         };
 
@@ -175,8 +186,14 @@ class FormType extends AbstractType
             return false !== $options['property_path'];
         };
 
+        // If data is given, the form is locked to that data
+        // (independent of its value)
+        $resolver->setOptional(array(
+            'data',
+        ));
+
         $resolver->setDefaults(array(
-            'data'               => null,
+            'block_name'         => null,
             'data_class'         => $dataClass,
             'empty_data'         => $emptyData,
             'trim'               => true,
@@ -206,14 +223,6 @@ class FormType extends AbstractType
     /**
      * {@inheritdoc}
      */
-    public function createBuilder($name, FormFactoryInterface $factory, array $options)
-    {
-        return new FormBuilder($name, $options['data_class'], new EventDispatcher(), $factory, $options);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
     public function getParent()
     {
         return null;
@@ -225,10 +234,5 @@ class FormType extends AbstractType
     public function getName()
     {
         return 'form';
-    }
-
-    private function humanize($text)
-    {
-        return ucfirst(trim(strtolower(preg_replace('/[_\s]+/', ' ', $text))));
     }
 }

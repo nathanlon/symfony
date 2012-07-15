@@ -13,9 +13,18 @@
     configuration (i.e. `config.yml`), merging could yield a set of base URL's
     for multiple environments.
 
+ * The priorities for the built-in listeners have changed:
+
+                                       2.0         2.1
+   security.firewall   request         64          8
+   locale listener     early_request   253         255
+                       request         -1          16
+   router listener     early_request   255         128
+                       request         10          32
+
 ### Doctrine
 
-    The DoctrineBundle is moved from the Symfony repository to the Doctrine repository.
+  * The DoctrineBundle is moved from the Symfony repository to the Doctrine repository.
     Therefore you should change the namespace of this bundle in your AppKernel.php:
 
     Before: `new Symfony\Bundle\DoctrineBundle\DoctrineBundle()`
@@ -65,6 +74,52 @@
 
     After: `$request->getLocale()`
 
+### HttpFoundation
+
+ * The current locale for the user is not stored anymore in the session
+
+   You can simulate the old behavior by registering a listener that looks like the following, if the paramater which handle locale value in the request is `_locale`:
+
+   ```
+   namespace XXX;
+
+   use Symfony\Component\HttpKernel\Event\GetResponseEvent;
+   use Symfony\Component\HttpKernel\KernelEvents;
+   use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+
+   class LocaleListener implements EventSubscriberInterface
+   {
+       private $defaultLocale;
+
+       public function __construct($defaultLocale = 'en')
+       {
+           $this->defaultLocale = $defaultLocale;
+       }
+
+       public function onKernelRequest(GetResponseEvent $event)
+       {
+           $request = $event->getRequest();
+           if (!$request->hasPreviousSession()) {
+               return;
+           }
+
+           if ($locale = $request->attributes->get('_locale')) {
+               $request->getSession()->set('_locale', $locale);
+           } else {
+               $request->setDefaultLocale($request->getSession()->get('_locale', $this->defaultLocale));
+           }
+       }
+
+       static public function getSubscribedEvents()
+       {
+           return array(
+               // must be registered before the default Locale listener
+               KernelEvents::REQUEST => array(array('onKernelRequest', 17)),
+           );
+       }
+   }
+   ```
+
 ### Security
 
   * `Symfony\Component\Security\Core\User\UserInterface::equals()` has moved to
@@ -88,7 +143,7 @@
         public function equals(UserInterface $user) { /* ... */ }
         // ...
     }
-```
+    ```
 
     After:
 
@@ -100,6 +155,7 @@
         // ...
     }
     ```
+
   * The custom factories for the firewall configuration are now
     registered during the build method of bundles instead of being registered
     by the end-user. This means that you will you need to remove the 'factories'
@@ -143,6 +199,22 @@
   * `MutableAclInterface::setParentAcl` now accepts `null`, review any
     implementations of this interface to reflect this change.
 
+  * The `UserPassword` constraint has moved from the Security Bundle to the Security Component:
+
+     Before:
+
+     ```
+     use Symfony\Bundle\SecurityBundle\Validator\Constraint\UserPassword;
+     use Symfony\Bundle\SecurityBundle\Validator\Constraint as SecurityAssert;
+     ```
+     
+     After:
+     
+     ```
+     use Symfony\Component\Security\Core\Validator\Constraint\UserPassword;
+     use Symfony\Component\Security\Core\Validator\Constraint as SecurityAssert;
+     ```
+
 ### Form
 
 #### BC Breaks in Form Types and Options
@@ -176,6 +248,50 @@
     public function buildView(FormViewInterface $view, FormInterface $form, array $options)
     public function finishView(FormViewInterface $view, FormInterface $form, array $options)
     ```
+
+  * The method `createBuilder` was removed from `FormTypeInterface` for performance
+    reasons. It is now not possible anymore to use custom implementations of
+    `FormBuilderInterface` for specific form types.
+
+    If you are in such a situation, you can subclass `FormRegistry` instead and override
+    `resolveType` to return a custom `ResolvedFormTypeInterface` implementation, within
+    which you can create your own `FormBuilderInterface` implementation. You should
+    register this custom registry class under the service name "form.registry" in order
+    to replace the default implementation.
+
+  * If you previously inherited from `FieldType`, you should now inherit from
+    `FormType`. You should also set the option `compound` to `false` if your field
+    is not supposed to contain child fields.
+
+    `FieldType` was deprecated and will be removed in Symfony 2.3.
+
+    Before:
+
+    ```
+    public function getParent(array $options)
+    {
+        return 'field';
+    }
+    ```
+
+    After:
+
+    ```
+    public function getParent()
+    {
+        return 'form';
+    }
+
+    public function setDefaultOptions(OptionsResolverInterface $resolver)
+    {
+        $resolver->setDefaults(array(
+            'compound' => false,
+        ));
+    }
+    ```
+
+    The changed signature of `getParent()` is explained in the next step.
+    The new method `setDefaultOptions` is described in the section "Deprecations".
 
   * No options are passed to `getParent()` of `FormTypeInterface` anymore. If
     you previously dynamically inherited from `FormType` or `FieldType`, you can now
@@ -234,8 +350,6 @@
         ));
     }
     ```
-
-    The new method `setDefaultOptions` is described in the section "Deprecations".
 
   * The mapping of property paths to arrays has changed.
 
@@ -446,6 +560,46 @@
     {% endfor %}
     ```
 
+  * Creation of default labels has been moved to the view layer. You will need
+    to incorporate this logic into any custom `form_label` templates to
+    accommodate those cases when the `label` option has not been explicitly
+    set.
+
+    ```
+    {% block form_label %}
+        {% if label is empty %}
+            {% set label = name|humanize %}
+        {% endif %}
+
+        {# ... #}
+
+    {% endblock %}
+    ````
+
+  * Custom styling of individual rows of a collection form has been removed for
+    performance reasons. Instead, all rows now have the same block name, where
+    the word "entry" replaces the previous occurence of the row index.
+
+    Before:
+
+    ```
+    {% block _author_tags_0_label %}
+        {# ... #}
+    {% endblock %}
+
+    {% block _author_tags_1_label %}
+        {# ... #}
+    {% endblock %}
+    ```
+
+    After:
+
+    ```
+    {% block _author_tags_entry_label %}
+        {# ... #}
+    {% endblock %}
+    ```
+
 #### Other BC Breaks
 
   * The order of the first two arguments of the methods `createNamed` and
@@ -524,6 +678,20 @@
     removed or made private. Instead of the first two, you can now use
     `getChoices()` and `getChoicesByValues()`. For the latter two, no
     replacement exists.
+
+  * HTML attributes are now passed in the `label_attr` variable for the `form_label` function.
+
+    Before:
+
+    ```
+    {{ form_label(form.name, 'Your Name', { 'attr': {'class': 'foo'} }) }}
+    ```
+
+    After:
+
+    ```
+    {{ form_label(form.name, 'Your Name', { 'label_attr': {'class': 'foo'} }) }}
+    ```
 
   * `EntitiesToArrayTransformer` and `EntityToIdTransformer` were removed.
     The former was replaced by `CollectionToArrayTransformer` in combination
@@ -628,12 +796,12 @@
   * The following methods in `FormBuilder` were deprecated and have a new
     equivalent:
 
-      * `prependClientTransformer`: no new equivalent, consider using `addViewTransformer`
+      * `prependClientTransformer`: `addViewTransformer`, with `true` as second argument
       * `appendClientTransformer`: `addViewTransformer`
       * `getClientTransformers`: `getViewTransformers`
       * `resetClientTransformers`: `resetViewTransformers`
       * `prependNormTransformer`: `addModelTransformer`
-      * `appendNormTransformer`: no new equivalent, consider using `addModelTransformer`
+      * `appendNormTransformer`: `addModelTransformer`, with `true` as second argument
       * `getNormTransformers`: `getModelTransformers`
       * `resetNormTransformers`: `resetModelTransformers`
 
@@ -643,7 +811,7 @@
     Before:
 
     ```
-    $builder->prependClientTransformer(new MyTransformer());
+    $builder->appendClientTransformer(new MyTransformer());
     ```
 
     After:
@@ -750,6 +918,7 @@
       * `getClientData`
       * `getChildren`
       * `hasChildren`
+      * `bindRequest`
 
     Before:
 
@@ -781,6 +950,20 @@
     if (count($form) > 0) {
     ```
 
+    Instead of `bindRequest`, you should now simply call `bind`:
+
+    Before:
+
+    ```
+    $form->bindRequest($request);
+    ```
+
+    After:
+
+    ```
+    $form->bind($request);
+    ```
+
   * The option "validation_constraint" was deprecated and will be removed
     in Symfony 2.3. You should use the option "constraints" instead,
     where you can pass one or more constraints for a form.
@@ -810,6 +993,64 @@
             new MinLength(3),
         ),
     ));
+    ```
+
+    Be aware that constraints will now only be validated if they belong
+    to the validated group! So if you validate a form in group "Custom"
+    and previously did:
+
+    ```
+    $builder->add('name', 'text', array(
+        'validation_constraint' => new NotBlank(),
+    ));
+    ```
+
+    Then you need to add the constraint to the group "Custom" now:
+
+    ```
+    $builder->add('name', 'text', array(
+        'constraints' => new NotBlank(array('groups' => 'Custom')),
+    ));
+    ```
+
+  * The options "data_timezone" and "user_timezone" in `DateType`,
+    `DateTimeType` and `TimeType` were deprecated and will be removed in
+    Symfony 2.3. They were renamed to "model_timezone" and "view_timezone".
+
+    Before:
+
+    ```
+    $builder->add('scheduledFor', 'date', array(
+        'data_timezone' => 'UTC',
+        'user_timezone' => 'America/New_York',
+    ));
+    ```
+
+    After:
+
+    ```
+    $builder->add('scheduledFor', 'date', array(
+        'model_timezone' => 'UTC',
+        'view_timezone' => 'America/New_York',
+    ));
+    ```
+
+  * The methods `addType`, `hasType` and `getType` in `FormFactory` are deprecated
+    and will be removed in Symfony 2.3. You should use the methods with the same
+    name on the `FormRegistry` instead.
+
+    Before:
+
+    ```
+    $this->get('form.factory')->addType(new MyFormType());
+    ```
+
+    After:
+
+    ```
+    $registry = $this->get('form.registry');
+
+    $registry->addType($registry->resolveType(new MyFormType()));
     ```
 
 ### Validator
@@ -947,6 +1188,54 @@
     private $recursiveCollection;
     ```
 
+  * The `Size`, `Min` and `Max` constraints were deprecated and will be removed in
+    Symfony 2.3. You should use the new constraint `Range` instead.
+
+    Before:
+
+    ```
+    /** @Assert\Size(min = 2, max = 16) */
+    private $numberOfCpus;
+    ```
+
+    After:
+
+    ```
+    /** @Assert\Range(min = 2, max = 16) */
+    private $numberOfCpus;
+    ```
+
+    Before:
+
+    ```
+    /** @Assert\Min(2) */
+    private $numberOfCpus;
+    ```
+
+    After:
+
+    ```
+    /** @Assert\Range(min = 2) */
+    private $numberOfCpus;
+    ```
+
+  * The `MinLength` and `MaxLength` constraints were deprecated and will be
+    removed in Symfony 2.3. You should use the new constraint `Length` instead.
+
+    Before:
+
+    ```
+    /** @Assert\MinLength(8) */
+    private $password;
+    ```
+
+    After:
+
+    ```
+    /** @Assert\Length(min = 8) */
+    private $password;
+    ```
+
 ### Session
 
   * Flash messages now return an array based on their type. The old method is
@@ -994,7 +1283,7 @@
 ### Serializer
 
  * The key names created by the  `GetSetMethodNormalizer` have changed from
-    from all lowercased to camelCased (e.g. `mypropertyvalue` to `myPropertyValue`).
+   all lowercased to camelCased (e.g. `mypropertyvalue` to `myPropertyValue`).
 
  * The `item` element is now converted to an array when deserializing XML.
 

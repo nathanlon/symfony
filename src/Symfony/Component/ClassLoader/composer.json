@@ -15,8 +15,9 @@
             "homepage": "http://symfony.com/contributors"
         }
     ],
+    "minimum-stability": "dev",
     "require": {
-        "php": ">=5.3.3"
+        "php": ">=5.3.4"
     },
     "require-dev": {
         "symfony/finder": "2.1.*"

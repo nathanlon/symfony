@@ -86,6 +86,7 @@ CHANGELOG
    * `hasAttribute`
    * `getClientData`
  * added FormBuilder methods
+   * `getTypes`
    * `addViewTransformer`
    * `getViewTransformers`
    * `resetViewTransformers`
@@ -139,3 +140,35 @@ CHANGELOG
  * deprecated `getChildren` in Form and FormBuilder in favor of `all`
  * deprecated `hasChildren` in Form and FormBuilder in favor of `count`
  * FormBuilder now implements \IteratorAggregate
+ * [BC BREAK] compound forms now always need a data mapper
+ * FormBuilder now maintains the order when explicitely adding form builders as children
+ * ChoiceType now doesn't add the empty value anymore if the choices already contain an empty element
+ * DateType, TimeType and DateTimeType now show empty values again if not required
+ * [BC BREAK] fixed rendering of errors for DateType, BirthdayType and similar ones
+ * [BC BREAK] fixed: form constraints are only validated if they belong to the validated group
+ * deprecated `bindRequest` in `Form` and replaced it by a listener to FormEvents::PRE_BIND
+ * fixed: the "data" option supersedes default values from the model
+ * changed DateType to refer to the "format" option for calculating the year and day choices instead
+   of padding them automatically
+ * [BC BREAK] DateType defaults to the format "yyyy-MM-dd" now if the widget is
+   "single_text", in order to support the HTML 5 date field out of the box
+ * added the option "format" to DateTimeType
+ * [BC BREAK] DateTimeType now outputs RFC 3339 dates by default, as generated and
+   consumed by HTML5 browsers, if the widget is "single_text"
+ * deprecated the options "data_timezone" and "user_timezone" in DateType, DateTimeType and TimeType
+   and renamed them to "model_timezone" and "view_timezone"
+ * fixed: TransformationFailedExceptions thrown in the model transformer are now caught by the form
+ * added FormRegistry and ResolvedFormTypeInterface
+ * deprecated FormFactory methods
+   * `addType`
+   * `hasType`
+   * `getType`
+ * [BC BREAK] FormFactory now expects a FormRegistryInterface as constructor argument
+ * [BC BREAK] The method `createBuilder` in FormTypeInterface is not supported anymore for performance reasons
+ * [BC BREAK] Removed `setTypes` from FormBuilder
+ * deprecated AbstractType methods
+   * `getExtensions`
+   * `setExtensions`
+ * ChoiceType now caches its created choice lists to improve performance
+ * [BC BREAK] Rows of a collection field cannot be themed individually anymore. All rows in the collection
+   field now have the same block names, which contains "entry" where it previously contained the row index.

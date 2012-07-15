@@ -57,7 +57,7 @@ class Process
      *
      * @var array
      */
-    static public $exitCodes = array(
+    public static $exitCodes = array(
         0 => 'OK',
         1 => 'General error',
         2 => 'Misuse of shell builtins',
@@ -131,7 +131,7 @@ class Process
             $this->env = null;
         }
         $this->stdin = $stdin;
-        $this->timeout = $timeout;
+        $this->setTimeout($timeout);
         $this->enhanceWindowsCompatibility = true;
         $this->options = array_replace(array('suppress_errors' => true, 'binary_pipes' => true), $options);
     }
@@ -585,8 +585,27 @@ class Process
         return $this->timeout;
     }
 
+    /**
+     * Sets the process timeout.
+     *
+     * To disable the timeout, set this value to null.
+     *
+     * @param integer|null
+     */
     public function setTimeout($timeout)
     {
+        if (null === $timeout) {
+            $this->timeout = null;
+
+            return;
+        }
+
+        $timeout = (integer) $timeout;
+
+        if ($timeout < 0) {
+            throw new \InvalidArgumentException('The timeout value must be a valid positive integer.');
+        }
+
         $this->timeout = $timeout;
     }
 

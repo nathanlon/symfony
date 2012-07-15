@@ -19,6 +19,8 @@ use Symfony\Component\Validator\Exception\UnexpectedTypeException;
  * @author Bernhard Schussek <bschussek@gmail.com>
  *
  * @api
+ *
+ * @deprecated Deprecated since version 2.1, to be removed in 2.3.
  */
 class MaxLengthValidator extends ConstraintValidator
 {
@@ -40,21 +42,21 @@ class MaxLengthValidator extends ConstraintValidator
             throw new UnexpectedTypeException($value, 'string');
         }
 
-        $value = (string) $value;
+        $stringValue = (string) $value;
 
         if (function_exists('grapheme_strlen') && 'UTF-8' === $constraint->charset) {
-            $length = grapheme_strlen($value);
+            $length = grapheme_strlen($stringValue);
         } elseif (function_exists('mb_strlen')) {
-            $length = mb_strlen($value, $constraint->charset);
+            $length = mb_strlen($stringValue, $constraint->charset);
         } else {
-            $length = strlen($value);
+            $length = strlen($stringValue);
         }
 
         if ($length > $constraint->limit) {
             $this->context->addViolation($constraint->message, array(
-                '{{ value }}' => $value,
+                '{{ value }}' => $stringValue,
                 '{{ limit }}' => $constraint->limit,
-            ), null, (int) $constraint->limit);
+            ), $value, (int) $constraint->limit);
         }
     }
 }

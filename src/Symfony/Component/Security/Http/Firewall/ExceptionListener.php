@@ -39,6 +39,7 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 class ExceptionListener
 {
     private $context;
+    private $providerKey;
     private $accessDeniedHandler;
     private $authenticationEntryPoint;
     private $authenticationTrustResolver;
@@ -46,11 +47,12 @@ class ExceptionListener
     private $logger;
     private $httpUtils;
 
-    public function __construct(SecurityContextInterface $context, AuthenticationTrustResolverInterface $trustResolver, HttpUtils $httpUtils, AuthenticationEntryPointInterface $authenticationEntryPoint = null, $errorPage = null, AccessDeniedHandlerInterface $accessDeniedHandler = null, LoggerInterface $logger = null)
+    public function __construct(SecurityContextInterface $context, AuthenticationTrustResolverInterface $trustResolver, HttpUtils $httpUtils, $providerKey, AuthenticationEntryPointInterface $authenticationEntryPoint = null, $errorPage = null, AccessDeniedHandlerInterface $accessDeniedHandler = null, LoggerInterface $logger = null)
     {
         $this->context = $context;
         $this->accessDeniedHandler = $accessDeniedHandler;
         $this->httpUtils = $httpUtils;
+        $this->providerKey = $providerKey;
         $this->authenticationEntryPoint = $authenticationEntryPoint;
         $this->authenticationTrustResolver = $trustResolver;
         $this->errorPage = $errorPage;
@@ -95,6 +97,8 @@ class ExceptionListener
                 return;
             }
         } elseif ($exception instanceof AccessDeniedException) {
+            $event->setException(new AccessDeniedHttpException($exception->getMessage(), $exception));
+
             $token = $this->context->getToken();
             if (!$this->authenticationTrustResolver->isFullFledged($token)) {
                 if (null !== $this->logger) {
@@ -125,10 +129,7 @@ class ExceptionListener
                         $subRequest->attributes->set(SecurityContextInterface::ACCESS_DENIED_ERROR, $exception);
 
                         $response = $event->getKernel()->handle($subRequest, HttpKernelInterface::SUB_REQUEST, true);
-                        $response->setStatusCode(403);
                     } else {
-                        $event->setException(new AccessDeniedHttpException($exception->getMessage(), $exception));
-
                         return;
                     }
                 } catch (\Exception $e) {
@@ -145,8 +146,6 @@ class ExceptionListener
             if (null !== $this->logger) {
                 $this->logger->info(sprintf('Logout exception occurred; wrapping with AccessDeniedHttpException (%s)', $exception->getMessage()));
             }
-
-            $event->setException(new AccessDeniedHttpException($exception->getMessage(), $exception));
 
             return;
         } else {
@@ -179,8 +178,8 @@ class ExceptionListener
     protected function setTargetPath(Request $request)
     {
         // session isn't required when using http basic authentication mechanism for example
-        if ($request->hasSession()) {
-            $request->getSession()->set('_security.target_path', $request->getUri());
+        if ($request->hasSession() && $request->isMethodSafe()) {
+            $request->getSession()->set('_security.' . $this->providerKey . '.target_path', $request->getUri());
         }
     }
 }

@@ -29,6 +29,11 @@ abstract class DoctrineType extends AbstractType
      */
     protected $registry;
 
+    /**
+     * @var array
+     */
+    private $choiceListCache = array();
+
     public function __construct(ManagerRegistry $registry)
     {
         $this->registry = $registry;
@@ -39,13 +44,14 @@ abstract class DoctrineType extends AbstractType
         if ($options['multiple']) {
             $builder
                 ->addEventSubscriber(new MergeDoctrineCollectionListener())
-                ->prependClientTransformer(new CollectionToArrayTransformer())
+                ->addViewTransformer(new CollectionToArrayTransformer(), true)
             ;
         }
     }
 
     public function setDefaultOptions(OptionsResolverInterface $resolver)
     {
+        $choiceListCache =& $this->choiceListCache;
         $registry = $this->registry;
         $type = $this;
 
@@ -59,17 +65,57 @@ abstract class DoctrineType extends AbstractType
             return null;
         };
 
-        $choiceList = function (Options $options) use ($registry) {
+        $choiceList = function (Options $options) use ($registry, &$choiceListCache, &$time) {
             $manager = $registry->getManager($options['em']);
 
-            return new EntityChoiceList(
-                $manager,
+            // Support for closures
+            $propertyHash = is_object($options['property'])
+                ? spl_object_hash($options['property'])
+                : $options['property'];
+
+            $choiceHashes = $options['choices'];
+
+            // Support for recursive arrays
+            if (is_array($choiceHashes)) {
+                // A second parameter ($key) is passed, so we cannot use
+                // spl_object_hash() directly (which strictly requires
+                // one parameter)
+                array_walk_recursive($choiceHashes, function ($value) {
+                    return spl_object_hash($value);
+                });
+            }
+
+            // Support for custom loaders (with query builders)
+            $loaderHash = is_object($options['loader'])
+                ? spl_object_hash($options['loader'])
+                : $options['loader'];
+
+            // Support for closures
+            $groupByHash = is_object($options['group_by'])
+                ? spl_object_hash($options['group_by'])
+                : $options['group_by'];
+
+            $hash = md5(json_encode(array(
+                spl_object_hash($manager),
                 $options['class'],
-                $options['property'],
-                $options['loader'],
-                $options['choices'],
-                $options['group_by']
-            );
+                $propertyHash,
+                $loaderHash,
+                $choiceHashes,
+                $groupByHash
+            )));
+
+            if (!isset($choiceListCache[$hash])) {
+                $choiceListCache[$hash] = new EntityChoiceList(
+                    $manager,
+                    $options['class'],
+                    $options['property'],
+                    $options['loader'],
+                    $options['choices'],
+                    $options['group_by']
+                );
+            }
+
+            return $choiceListCache[$hash];
         };
 
         $resolver->setDefaults(array(

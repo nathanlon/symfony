@@ -54,9 +54,14 @@ class FormConfig implements FormConfigEditorInterface
     private $virtual = false;
 
     /**
-     * @var array
+     * @var Boolean
      */
-    private $types = array();
+    private $compound = false;
+
+    /**
+     * @var ResolvedFormTypeInterface
+     */
+    private $type;
 
     /**
      * @var array
@@ -112,6 +117,11 @@ class FormConfig implements FormConfigEditorInterface
      * @var string
      */
     private $dataClass;
+
+    /**
+     * @var Boolean
+     */
+    private $dataLocked;
 
     /**
      * @var array
@@ -179,9 +189,13 @@ class FormConfig implements FormConfigEditorInterface
     /**
      * {@inheritdoc}
      */
-    public function addViewTransformer(DataTransformerInterface $viewTransformer)
+    public function addViewTransformer(DataTransformerInterface $viewTransformer, $forcePrepend = false)
     {
-        $this->viewTransformers[] = $viewTransformer;
+        if ($forcePrepend) {
+            array_unshift($this->viewTransformers, $viewTransformer);
+        } else {
+            $this->viewTransformers[] = $viewTransformer;
+        }
 
         return $this;
     }
@@ -222,9 +236,7 @@ class FormConfig implements FormConfigEditorInterface
      */
     public function prependClientTransformer(DataTransformerInterface $viewTransformer)
     {
-        array_unshift($this->viewTransformers, $viewTransformer);
-
-        return $this;
+        return $this->addViewTransformer($viewTransformer, true);
     }
 
     /**
@@ -243,9 +255,13 @@ class FormConfig implements FormConfigEditorInterface
     /**
      * {@inheritdoc}
      */
-    public function addModelTransformer(DataTransformerInterface $modelTransformer)
+    public function addModelTransformer(DataTransformerInterface $modelTransformer, $forceAppend = false)
     {
-        array_unshift($this->modelTransformers, $modelTransformer);
+        if ($forceAppend) {
+            $this->modelTransformers[] = $modelTransformer;
+        } else {
+            array_unshift($this->modelTransformers, $modelTransformer);
+        }
 
         return $this;
     }
@@ -271,9 +287,7 @@ class FormConfig implements FormConfigEditorInterface
      */
     public function appendNormTransformer(DataTransformerInterface $modelTransformer)
     {
-        $this->modelTransformers[] = $modelTransformer;
-
-        return $this;
+        return $this->addModelTransformer($modelTransformer, true);
     }
 
     /**
@@ -355,9 +369,17 @@ class FormConfig implements FormConfigEditorInterface
     /**
      * {@inheritdoc}
      */
-    public function getTypes()
+    public function getCompound()
     {
-        return $this->types;
+        return $this->compound;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getType()
+    {
+        return $this->type;
     }
 
     /**
@@ -488,6 +510,14 @@ class FormConfig implements FormConfigEditorInterface
     public function getDataClass()
     {
         return $this->dataClass;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getDataLocked()
+    {
+        return $this->dataLocked;
     }
 
     /**
@@ -631,9 +661,19 @@ class FormConfig implements FormConfigEditorInterface
     /**
      * {@inheritdoc}
      */
-    public function setTypes(array $types)
+    public function setCompound($compound)
     {
-        $this->types = $types;
+        $this->compound = $compound;
+
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function setType(ResolvedFormTypeInterface $type)
+    {
+        $this->type = $type;
 
         return $this;
     }
@@ -649,6 +689,16 @@ class FormConfig implements FormConfigEditorInterface
     }
 
     /**
+     * {@inheritdoc}
+     */
+    public function setDataLocked($locked)
+    {
+        $this->dataLocked = $locked;
+
+        return $this;
+    }
+
+    /**
      * Validates whether the given variable is a valid form name.
      *
      * @param string $name The tested form name.
@@ -656,7 +706,7 @@ class FormConfig implements FormConfigEditorInterface
      * @throws UnexpectedTypeException   If the name is not a string.
      * @throws \InvalidArgumentException If the name contains invalid characters.
      */
-    static public function validateName($name)
+    public static function validateName($name)
     {
         if (!is_string($name)) {
             throw new UnexpectedTypeException($name, 'string');
@@ -684,7 +734,7 @@ class FormConfig implements FormConfigEditorInterface
      *
      * @return Boolean Whether the name is valid.
      */
-    static public function isValidName($name)
+    public static function isValidName($name)
     {
         return '' === $name || preg_match('/^[a-zA-Z0-9_][a-zA-Z0-9_\-:]*$/D', $name);
     }

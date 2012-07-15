@@ -29,7 +29,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function addEventListener($eventName, $listener, $priority = 0);
+    public function addEventListener($eventName, $listener, $priority = 0);
 
     /**
      * Adds an event subscriber for events on this form.
@@ -38,7 +38,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function addEventSubscriber(EventSubscriberInterface $subscriber);
+    public function addEventSubscriber(EventSubscriberInterface $subscriber);
 
     /**
      * Adds a validator to the form.
@@ -49,10 +49,10 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @deprecated Deprecated since version 2.1, to be removed in 2.3.
      */
-    function addValidator(FormValidatorInterface $validator);
+    public function addValidator(FormValidatorInterface $validator);
 
     /**
-     * Appends a transformer to the view transformer chain.
+     * Appends / prepends a transformer to the view transformer chain.
      *
      * The transform method of the transformer is used to convert data from the
      * normalized to the view format.
@@ -60,20 +60,21 @@ interface FormConfigEditorInterface extends FormConfigInterface
      * view to the normalized format.
      *
      * @param DataTransformerInterface $viewTransformer
+     * @param Boolean                  $forcePrepend if set to true, prepend instead of appending
      *
      * @return self The configuration object.
      */
-    function addViewTransformer(DataTransformerInterface $viewTransformer);
+    public function addViewTransformer(DataTransformerInterface $viewTransformer, $forcePrepend = false);
 
     /**
      * Clears the view transformers.
      *
      * @return self The configuration object.
      */
-    function resetViewTransformers();
+    public function resetViewTransformers();
 
     /**
-     * Prepends a transformer to the normalization transformer chain.
+     * Prepends / appends a transformer to the normalization transformer chain.
      *
      * The transform method of the transformer is used to convert data from the
      * model to the normalized format.
@@ -81,17 +82,18 @@ interface FormConfigEditorInterface extends FormConfigInterface
      * normalized to the model format.
      *
      * @param DataTransformerInterface $modelTransformer
+     * @param Boolean                  $forceAppend if set to true, append instead of prepending
      *
      * @return self The configuration object.
      */
-    function addModelTransformer(DataTransformerInterface $modelTransformer);
+    public function addModelTransformer(DataTransformerInterface $modelTransformer, $forceAppend = false);
 
     /**
      * Clears the normalization transformers.
      *
      * @return self The configuration object.
      */
-    function resetModelTransformers();
+    public function resetModelTransformers();
 
     /**
      * Sets the value for an attribute.
@@ -101,7 +103,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setAttribute($name, $value);
+    public function setAttribute($name, $value);
 
     /**
      * Sets the attributes.
@@ -110,7 +112,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setAttributes(array $attributes);
+    public function setAttributes(array $attributes);
 
     /**
      * Sets the data mapper used by the form.
@@ -119,7 +121,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setDataMapper(DataMapperInterface $dataMapper = null);
+    public function setDataMapper(DataMapperInterface $dataMapper = null);
 
     /**
      * Set whether the form is disabled.
@@ -128,7 +130,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setDisabled($disabled);
+    public function setDisabled($disabled);
 
     /**
      * Sets the data used for the client data when no value is bound.
@@ -137,7 +139,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setEmptyData($emptyData);
+    public function setEmptyData($emptyData);
 
     /**
      * Sets whether errors bubble up to the parent.
@@ -146,7 +148,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setErrorBubbling($errorBubbling);
+    public function setErrorBubbling($errorBubbling);
 
     /**
      * Sets whether this field is required to be filled out when bound.
@@ -155,7 +157,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setRequired($required);
+    public function setRequired($required);
 
     /**
      * Sets the property path that the form should be mapped to.
@@ -166,7 +168,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setPropertyPath($propertyPath);
+    public function setPropertyPath($propertyPath);
 
     /**
      * Sets whether the form should be mapped to an element of its
@@ -176,7 +178,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setMapped($mapped);
+    public function setMapped($mapped);
 
     /**
      * Sets whether the form's data should be modified by reference.
@@ -186,7 +188,7 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setByReference($byReference);
+    public function setByReference($byReference);
 
     /**
      * Sets whether the form should be virtual.
@@ -195,16 +197,27 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setVirtual($virtual);
+    public function setVirtual($virtual);
+
+    /**
+     * Sets whether the form should be compound.
+     *
+     * @param  Boolean $compound Whether the form should be compound.
+     *
+     * @return self The configuration object.
+     *
+     * @see FormConfigInterface::getCompound()
+     */
+    public function setCompound($compound);
 
     /**
      * Set the types.
      *
-     * @param array $types An array FormTypeInterface
+     * @param ResolvedFormTypeInterface $type The type of the form.
      *
      * @return self The configuration object.
      */
-    function setTypes(array $types);
+    public function setType(ResolvedFormTypeInterface $type);
 
     /**
      * Sets the initial data of the form.
@@ -213,5 +226,18 @@ interface FormConfigEditorInterface extends FormConfigInterface
      *
      * @return self The configuration object.
      */
-    function setData($data);
+    public function setData($data);
+
+    /**
+     * Locks the form's data to the data passed in the configuration.
+     *
+     * A form with locked data is restricted to the data passed in
+     * this configuration. The data can only be modified then by
+     * binding the form.
+     *
+     * @param  Boolean $locked Whether to lock the default data.
+     *
+     * @return self The configuration object.
+     */
+    public function setDataLocked($locked);
 }

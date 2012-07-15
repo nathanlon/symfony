@@ -28,7 +28,7 @@ class ModelType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
         if ($options['multiple']) {
-            $builder->prependClientTransformer(new CollectionToArrayTransformer());
+            $builder->addViewTransformer(new CollectionToArrayTransformer(), true);
         }
     }
 
@@ -65,6 +65,6 @@ class ModelType extends AbstractType
 
     public function getName()
     {
-        return 'propel_model';
+        return 'model';
     }
 }
